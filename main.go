@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"time"
 
@@ -16,16 +17,22 @@ func main() {
 	var (
 		user   string
 		pass   string
+		areaID string
 		isList bool
 	)
-	flag.StringVar(&user, "user", "", "username")
-	flag.StringVar(&pass, "pass", "", "password")
-	flag.BoolVar(&isList, "list", false, "show station list")
+	flag.StringVar(&user, "user", "", "Username")
+	flag.StringVar(&pass, "pass", "", "Password")
+	flag.StringVar(&areaID, "area", "", "AreaID")
+	flag.BoolVar(&isList, "list", false, "Show station list")
 	flag.Parse()
 
 	client, err := radiko.New("")
 	if err != nil {
 		log.Fatalf("%+v", err)
+	}
+
+	if areaID != "" {
+		client.SetAreaID(areaID)
 	}
 
 	if isList {
@@ -65,10 +72,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("%+v", err)
 	}
-	log.Print(info)
 
+	playlistURL := fmt.Sprintf("http://c-radiko.smartstream.ne.jp/%s/_definst_/simul-stream.stream/playlist.m3u8", station)
+	log.Printf("m3u8: %s", playlistURL)
+
+	ticker := time.NewTicker(time.Second * 10)
 	go func() {
-		ticker := time.NewTicker(time.Minute)
 		for range ticker.C {
 			newInfo, err := getStationProgram(client, station)
 			if err != nil {
@@ -82,18 +91,25 @@ func main() {
 		}
 	}()
 
-	mplayer := exec.Command(
-		"mplayer",
-		"-cache", "32",
-		"-http-header-fields", fmt.Sprintf(`"X-Radiko-Authtoken: %s"`, authToken),
-		fmt.Sprintf("http://c-radiko.smartstream.ne.jp/%s/_definst_/simul-stream.stream/playlist.m3u8", station),
+	ffplay := exec.Command(
+		"ffmpeg",
+		"-headers", fmt.Sprintf("'X-Radiko-Authtoken: %s\r\n'", authToken),
+		"-i", playlistURL,
+		"-f", "wav",
+		"-hls_allow_cache", "0",
+		"-live_start_index", "-99999",
+		"-",
+		"|",
+		"ffplay",
+		"-i", "-",
 	)
-
 	cmd := exec.Command(
 		"bash",
 		"-c",
-		mplayer.String(),
+		ffplay.String(),
 	)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	log.Print(cmd.String())
 
 	if err := cmd.Run(); err != nil {
