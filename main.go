@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/yyoshiki41/go-radiko"
@@ -73,7 +74,11 @@ func main() {
 		log.Fatalf("%+v", err)
 	}
 
-	playlistURL := fmt.Sprintf("http://c-radiko.smartstream.ne.jp/%s/_definst_/simul-stream.stream/playlist.m3u8", station)
+	host := "c-radiko.smartstream.ne.jp"
+	if strings.Contains(station, "JOAK") {
+		host = "f-radiko.smartstream.ne.jp"
+	}
+	playlistURL := fmt.Sprintf("https://%s/%s/_definst_/simul-stream.stream/playlist.m3u8", host, station)
 	log.Printf("m3u8: %s", playlistURL)
 
 	ticker := time.NewTicker(time.Second * 10)
@@ -101,6 +106,7 @@ func main() {
 		"-",
 		"|",
 		"ffplay",
+		"-window_title", "radiko",
 		"-i", "-",
 	)
 	cmd := exec.Command(
